@@ -20,5 +20,5 @@ public class SalePostRequestBody {
     private List<String> productName;
     private List<BigDecimal> quantityRequested;
     private BigDecimal totalPrice;
-    private ArrayList<Product> productId;
+    private ArrayList<Long> productId;
 }

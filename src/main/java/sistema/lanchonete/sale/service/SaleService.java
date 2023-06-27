@@ -20,6 +20,7 @@ import sistema.lanchonete.product.repository.ProductRepository;
 import sistema.lanchonete.product.service.ProductService;
 import sistema.lanchonete.recipe.domain.Recipe;
 import sistema.lanchonete.recipe.repository.RecipeRepository;
+import sistema.lanchonete.recipe.service.RecipeService;
 import sistema.lanchonete.sale.domain.Sale;
 import sistema.lanchonete.sale.dto.SalePostRequestBody;
 import sistema.lanchonete.sale.dto.SalePutRequestBody;
@@ -44,6 +45,7 @@ public class SaleService {
     private final ProductRepository productRepository;
     private final DateUtil dateUtil;
     private final StockRepository stockRepository;
+    private final RecipeService recipeService;
     private final RecipeRepository recipeRepository;
     private final PaymentRepository paymentRepository;
 
@@ -89,7 +91,6 @@ public class SaleService {
             Product product = getProductService().findByNameOrThrowBackBadRequestException(
                     salePostRequestBody.getProductName().get(i));
             productList.add(product);
-            salePostRequestBody.setProductId(productList);
             if (!product.getRecipe()){
                 validateProductStock(product.getProductName(), salePostRequestBody.getQuantityRequested().get(i));
             } else {
@@ -98,12 +99,12 @@ public class SaleService {
             }
             BigDecimal sumPoints = salePostRequestBody.getTotalPrice().add(product.getProductCost());
             salePostRequestBody.setTotalPrice(sumPoints);
-            salePostRequestBody.setProductId(productList);
+            salePostRequestBody.setProductId(salePostRequestBody.getProductId());
         }
         validatePaymentPoints(salePostRequestBody.getClientCpf(), salePostRequestBody.getTotalPrice());
         return getSaleRepository().save(Sale.builder().tableNumber(salePostRequestBody.getTableNumber())
                 .clientCpf(client)
-                .productName(salePostRequestBody.getProductName())
+                .productName(salePostRequestBody.getProductName()).productId(salePostRequestBody.getProductId())
                 .quantityRequested(salePostRequestBody.getQuantityRequested())
                 .totalPrice(salePostRequestBody.getTotalPrice()).build()); // total price = price to pay for the order
     }
@@ -132,7 +133,7 @@ public class SaleService {
         }
     }
     private void validateRecipeIngredientsStock(String productName, BigDecimal quantityRequested){
-        Recipe recipe = getRecipeRepository().findByRecipeName(productName);
+        Recipe recipe = getRecipeService().findByRecipeNameOrThrowBackBadRequestException(productName);
         for (int i = 0; i < recipe.getRecipeIngredients().size(); i++){
             BigDecimal ingredientQuantity = (recipe.getIngredientQuantity().get(i).multiply(quantityRequested));
             validateProductStock(recipe.getRecipeIngredients().get(i), ingredientQuantity);

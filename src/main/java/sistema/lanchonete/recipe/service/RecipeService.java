@@ -97,6 +97,7 @@ public class RecipeService {
         product.setProductValue(BigDecimal.valueOf(0));
         product.setProductCost(BigDecimal.valueOf(0));
         product.setRecipe(false);
+        product.setStockId(stockRepository.findByItemName(product.getProductName()));
         return getProductRepository().save(product);
     }
 

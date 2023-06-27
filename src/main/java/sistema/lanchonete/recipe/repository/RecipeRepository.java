@@ -12,7 +12,7 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
                     "WHERE r.recipe_name = :recipeName")
     Recipe findByRecipeName(@Param("recipeName") String recipeName);
     @Query(nativeQuery = true,
-            value = "SELECT * " +
+            value = "SELECT COUNT(*)>0 " +
                     "FROM recipe r " +
                     "WHERE r.recipe_name = :recipeName")
     boolean exitsRecipeName(@Param("recipeName") String recipeName);

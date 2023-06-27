@@ -35,7 +35,7 @@ public class Sale {
     private List<BigDecimal> quantityRequested;
     @Column(name = "total_price")
     private BigDecimal totalPrice;
-    @ManyToOne
-    @JoinColumn(name = "product_id")
-    private Product productId;
+    @OneToMany(targetEntity = Product.class)
+    @Column(name = "product_id")
+    private List<Long> productId;
 }

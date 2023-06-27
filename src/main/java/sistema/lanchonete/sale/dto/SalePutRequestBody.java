@@ -19,5 +19,5 @@ public class SalePutRequestBody {
     private List<Product> productName;
     private List<BigDecimal> quantityRequested;
     private BigDecimal totalPrice;
-    private ArrayList<Product> productId;
+    private ArrayList<Long> productId;
 }
