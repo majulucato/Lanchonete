@@ -1,0 +1,18 @@
+version: '4.19'
+
+services:
+  db:
+    image: postgres
+    container_name: lanchonete-postgresql
+    restart: always
+    environment:
+      POSTGRES_DB: lanchonete
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 123456
+    ports:
+    - "5432:5432"
+    volumes:
+      - postgres:/data/lanchonete
+
+volumes:
+  postgres:

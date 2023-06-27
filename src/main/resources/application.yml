@@ -1,0 +1,21 @@
+server:
+  error:
+    include-stracktrace: on-param
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: admin
+    password: 123456
+    testWhileIdle: true
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+      show-sql: true
+      dialect: org.hibernate.dialect.PostgreSQLDialect
+
+    properties:
+      hibernate:
+        jdbc:
+          lab: nan_contextual_creation=true
