@@ -14,6 +14,7 @@ import sistema.lanchonete.client.domain.Client;
 import sistema.lanchonete.client.repository.ClientRepository;
 import sistema.lanchonete.client.service.ClientService;
 import sistema.lanchonete.payment.domain.Payment;
+import sistema.lanchonete.payment.repository.PaymentRepository;
 import sistema.lanchonete.product.domain.Product;
 import sistema.lanchonete.product.repository.ProductRepository;
 import sistema.lanchonete.product.service.ProductService;
@@ -30,7 +31,6 @@ import sistema.lanchonete.stock.repository.StockRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.List;
 
 @Service
 @Getter
@@ -45,6 +45,7 @@ public class SaleService {
     private final DateUtil dateUtil;
     private final StockRepository stockRepository;
     private final RecipeRepository recipeRepository;
+    private final PaymentRepository paymentRepository;
 
     public SaleRepository getSaleRepository() {
         return saleRepository;
@@ -80,27 +81,29 @@ public class SaleService {
 
     @Transactional
     public Sale save(@Validated SalePostRequestBody salePostRequestBody) {
-        validateClient(salePostRequestBody.getClientCpf());
-        List<Product> productList = new ArrayList<>();
+        validateClient(salePostRequestBody.getClientCpf());//ok
+        Client client = clientService.findByCpfOrThrowBackBadRequestException(salePostRequestBody.getClientCpf());
+        ArrayList<Product> productList = new ArrayList<>();
+        salePostRequestBody.setTotalPrice(BigDecimal.valueOf(0));
         for (int i = 0; i < salePostRequestBody.getProductName().size(); i++) {
-            productList.add(getProductService().findByNameOrThrowBackBadRequestException(
-                    salePostRequestBody.getProductName().get(i).getProductName()));
-            salePostRequestBody.setProductName(productList);
-            if (!(salePostRequestBody.getProductName().get(i)).getRecipe()){
-                validateProductStock(salePostRequestBody.getProductName().get(i).getProductName(),
-                        salePostRequestBody.getQuantityRequested().get(i));
+            Product product = getProductService().findByNameOrThrowBackBadRequestException(
+                    salePostRequestBody.getProductName().get(i));
+            productList.add(product);
+            salePostRequestBody.setProductId(productList);
+            if (!product.getRecipe()){
+                validateProductStock(product.getProductName(), salePostRequestBody.getQuantityRequested().get(i));
             } else {
-               validateRecipeIngredientsStock(salePostRequestBody.getProductName().get(i).getProductName(),
+               validateRecipeIngredientsStock(product.getProductName(),
                        salePostRequestBody.getQuantityRequested().get(i));
             }
-            BigDecimal sumPoints = salePostRequestBody.getTotalPrice()
-                    .add(salePostRequestBody.getProductName().get(i).getProductCost());
+            BigDecimal sumPoints = salePostRequestBody.getTotalPrice().add(product.getProductCost());
             salePostRequestBody.setTotalPrice(sumPoints);
+            salePostRequestBody.setProductId(productList);
         }
         validatePaymentPoints(salePostRequestBody.getClientCpf(), salePostRequestBody.getTotalPrice());
         return getSaleRepository().save(Sale.builder().tableNumber(salePostRequestBody.getTableNumber())
-                .clientCpf(clientService.findByCpfOrThrowBackBadRequestException(salePostRequestBody.getClientCpf()))
-                .productName((Product) productList)
+                .clientCpf(client)
+                .productName(salePostRequestBody.getProductName())
                 .quantityRequested(salePostRequestBody.getQuantityRequested())
                 .totalPrice(salePostRequestBody.getTotalPrice()).build()); // total price = price to pay for the order
     }
@@ -139,12 +142,12 @@ public class SaleService {
     private void validateProductStock(String productName, BigDecimal quantityRequested) {
         Product product = getProductService().findByNameOrThrowBackBadRequestException(productName);
         Stock stock = stockRepository.findByItemName(product.getProductName());
-        if (quantityRequested.compareTo(stock.getStockQuantity()) <= 0 ){
+        BigDecimal quantityMissing = quantityRequested.subtract(stock.getStockQuantity());
+        if (quantityMissing.compareTo(BigDecimal.ZERO) <= 0 ){
             stock.setStockQuantity(stock.getStockQuantity().subtract(quantityRequested));
             getStockRepository().save(stock);
         }
-        if (quantityRequested.compareTo(stock.getStockQuantity()) > 0){
-            BigDecimal quantityMissing = quantityRequested.subtract(stock.getStockQuantity());
+        if (quantityMissing.compareTo(BigDecimal.ZERO) > 0){
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "There is no Stock of products to produce the order. \n Missing "+quantityMissing+" from item "+
                             product.getProductName()+" to finish the order");
@@ -156,6 +159,6 @@ public class SaleService {
         payment.setPointsSale(totalPrice);
         payment.setPaymentDate((dateUtil.formatLocalDateTimeToDatabaseStyle(LocalDateTime.now())));
         payment.setStatus(false);
-        return payment;
+        return getPaymentRepository().save(payment);
     }
 }

@@ -6,6 +6,7 @@ import lombok.Data;
 import sistema.lanchonete.product.domain.Product;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -18,4 +19,5 @@ public class SalePutRequestBody {
     private List<Product> productName;
     private List<BigDecimal> quantityRequested;
     private BigDecimal totalPrice;
+    private ArrayList<Product> productId;
 }

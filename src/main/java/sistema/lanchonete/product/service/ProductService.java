@@ -40,12 +40,16 @@ public class ProductService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product not found"));
     }
     public Product findByNameOrThrowBackBadRequestException(String productName) {
-        if (getProductRepository().exitsProductName(productName)==true){
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product "+productName+" already exists");
+        if (!getProductRepository().exitsProductName(productName)){
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product "+productName+" not found");
         }
         return getProductRepository().findByProductName(productName);
     }
-
+    public void existsByName(String productName){
+        if (getProductRepository().exitsProductName(productName)){
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product "+productName+" already exists");
+        }
+    }
     @Transactional
     public void delete(long id) {
         getProductRepository().delete(findByIdOrThrowBackBadRequestException(id));
@@ -53,7 +57,7 @@ public class ProductService {
 
     @Transactional
     public Product save(@Validated ProductPostRequestBody productPostRequestBody) {
-        findByNameOrThrowBackBadRequestException(productPostRequestBody.getProductName());
+        existsByName(productPostRequestBody.getProductName());
         if (productPostRequestBody.getRecipe() == false){
             createStock(productPostRequestBody.getProductName());
             productPostRequestBody.setStockId(stockRepository.findByItemName(productPostRequestBody.getProductName()));

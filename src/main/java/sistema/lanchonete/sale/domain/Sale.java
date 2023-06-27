@@ -1,7 +1,7 @@
 package sistema.lanchonete.sale.domain;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,14 +26,16 @@ public class Sale {
     @Column(name = "table_number")
     private Integer tableNumber;
     @ManyToOne
-    @NotEmpty
+    @NotNull
     @JoinColumn(name = "client_cpf")
     private Client clientCpf;
-    @ManyToOne
-    @JoinColumn(name = "product_name")
-    private Product productName;
+    @Column(name = "product_name")
+    private List<String> productName;
     @Column(name = "quantity_requested")
     private List<BigDecimal> quantityRequested;
     @Column(name = "total_price")
     private BigDecimal totalPrice;
+    @ManyToOne
+    @JoinColumn(name = "product_id")
+    private Product productId;
 }
