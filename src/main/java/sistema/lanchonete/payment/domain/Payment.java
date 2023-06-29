@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import sistema.lanchonete.client.domain.Client;
+import sistema.lanchonete.sale.domain.Sale;
 
 import java.math.BigDecimal;
 @Data
@@ -29,4 +30,7 @@ public class Payment {
     private String paymentDate;
     @Column(name = "payment_status")
     private Boolean status; // 0 - started; 1 - finished;
+    @OneToOne
+    @JoinColumn(name = "sale_id")
+    private Sale saleId;
 }

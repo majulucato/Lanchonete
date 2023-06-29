@@ -1,6 +1,8 @@
 package sistema.lanchonete.sale.domain;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,6 +25,8 @@ public class Sale {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "sale_id")
     private Long saleId;
+    @Min(1)
+    @Max(15)
     @Column(name = "table_number")
     private Integer tableNumber;
     @ManyToOne
@@ -35,7 +39,11 @@ public class Sale {
     private List<BigDecimal> quantityRequested;
     @Column(name = "total_price")
     private BigDecimal totalPrice;
-    @OneToMany(targetEntity = Product.class)
-    @Column(name = "product_id")
-    private List<Long> productId;
+    @ManyToMany
+    @JoinColumn(name = "product_id")
+    private List<Product> productId;
+    @Column(name = "sale_status")
+    private Boolean status; // 0 - iniciado; 1 - pago;
+    @Column(name = "sale_date")
+    private String saleDate;
 }

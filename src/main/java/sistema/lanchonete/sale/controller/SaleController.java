@@ -13,6 +13,7 @@ import sistema.lanchonete.product.dto.ProductPostRequestBody;
 import sistema.lanchonete.product.dto.ProductPutRequestBody;
 import sistema.lanchonete.product.service.ProductService;
 import sistema.lanchonete.sale.domain.Sale;
+import sistema.lanchonete.sale.dto.FinishOpenOrders;
 import sistema.lanchonete.sale.dto.SalePostRequestBody;
 import sistema.lanchonete.sale.dto.SalePutRequestBody;
 import sistema.lanchonete.sale.service.SaleService;
@@ -53,6 +54,11 @@ public class SaleController {
     public ResponseEntity<Sale> replace(@PathVariable long id,
                                            @RequestBody SalePutRequestBody salePutRequestBody){
         getSaleService().replace(salePutRequestBody);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+    @PutMapping(path = "/finish-open-orders")
+    public ResponseEntity<Sale> finishOpenOrders(@RequestBody FinishOpenOrders finishOpenOrders){
+        getSaleService().finishOpenOrders(finishOpenOrders);
         return new ResponseEntity<>(HttpStatus.OK);
     }
 }

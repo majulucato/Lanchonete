@@ -33,6 +33,7 @@ public class Client {
     @Min(8)
     @Column(name = "client_phone")
     private String clientPhone;
+    @Min(0)
     @Column(name = "client_points")
     private BigDecimal clientPoints;
 }

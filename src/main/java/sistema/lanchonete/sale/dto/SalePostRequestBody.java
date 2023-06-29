@@ -4,10 +4,8 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
-import sistema.lanchonete.product.domain.Product;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -20,5 +18,5 @@ public class SalePostRequestBody {
     private List<String> productName;
     private List<BigDecimal> quantityRequested;
     private BigDecimal totalPrice;
-    private ArrayList<Long> productId;
+    private Boolean status;
 }

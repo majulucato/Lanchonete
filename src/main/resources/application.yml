@@ -19,3 +19,6 @@ spring:
       hibernate:
         jdbc:
           lab: nan_contextual_creation=true
+  jackson:
+    serialization:
+      fail-on-empty-beans: false

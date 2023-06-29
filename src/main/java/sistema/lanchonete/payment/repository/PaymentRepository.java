@@ -19,4 +19,15 @@ public interface PaymentRepository extends JpaRepository<Payment,Long> {
                     "FROM payment p " +
                     "WHERE p.client_cpf = :clientCpf")
     boolean existsByClientCpf(@Param("clientCpf")String clientCpf);
+    @Query(nativeQuery = true,
+            value = "SELECT * " +
+                    "FROM payment p " +
+                    "WHERE p.client_cpf = :clientCpf " +
+                    "AND p.payment_date = :paymentDate")
+    Payment findByClientCpfAndTime(@Param("clientCpf")Long clientCpf, @Param("paymentDate")String paymentDate);
+    @Query(nativeQuery = true,
+            value = "SELECT * " +
+                    "FROM payment p " +
+                    "WHERE p.sale_id = :saleId")
+    Payment findBySaleId(@Param("saleId")Long saleId);
 }

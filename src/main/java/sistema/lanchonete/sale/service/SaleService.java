@@ -1,5 +1,6 @@
 package sistema.lanchonete.sale.service;
 
+import jakarta.validation.Valid;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -22,6 +23,7 @@ import sistema.lanchonete.recipe.domain.Recipe;
 import sistema.lanchonete.recipe.repository.RecipeRepository;
 import sistema.lanchonete.recipe.service.RecipeService;
 import sistema.lanchonete.sale.domain.Sale;
+import sistema.lanchonete.sale.dto.FinishOpenOrders;
 import sistema.lanchonete.sale.dto.SalePostRequestBody;
 import sistema.lanchonete.sale.dto.SalePutRequestBody;
 import sistema.lanchonete.sale.repository.SaleRepository;
@@ -32,6 +34,7 @@ import sistema.lanchonete.stock.repository.StockRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @Getter
@@ -78,19 +81,24 @@ public class SaleService {
     @Transactional
     public void replace(SalePutRequestBody salePutRequestBody) {
         delete(salePutRequestBody.getSaleId());
+        Payment payment = getPaymentRepository().findBySaleId(salePutRequestBody.getSaleId());
+        getPaymentRepository().deleteById(payment.getPaymentId());
         System.out.println("Previous request delete, you can now post a new order");
     }
 
     @Transactional
     public Sale save(@Validated SalePostRequestBody salePostRequestBody) {
-        validateClient(salePostRequestBody.getClientCpf());//ok
+        validateClient(salePostRequestBody.getClientCpf());
         Client client = clientService.findByCpfOrThrowBackBadRequestException(salePostRequestBody.getClientCpf());
-        ArrayList<Product> productList = new ArrayList<>();
         salePostRequestBody.setTotalPrice(BigDecimal.valueOf(0));
+        if (salePostRequestBody.getStatus()==null){
+            salePostRequestBody.setStatus(true);
+        }
+        List<Product> productIds = new ArrayList<>();
         for (int i = 0; i < salePostRequestBody.getProductName().size(); i++) {
             Product product = getProductService().findByNameOrThrowBackBadRequestException(
                     salePostRequestBody.getProductName().get(i));
-            productList.add(product);
+            productIds.add(product);
             if (!product.getRecipe()){
                 validateProductStock(product.getProductName(), salePostRequestBody.getQuantityRequested().get(i));
             } else {
@@ -99,15 +107,48 @@ public class SaleService {
             }
             BigDecimal sumPoints = salePostRequestBody.getTotalPrice().add(product.getProductCost());
             salePostRequestBody.setTotalPrice(sumPoints);
-            salePostRequestBody.setProductId(salePostRequestBody.getProductId());
         }
-        validatePaymentPoints(salePostRequestBody.getClientCpf(), salePostRequestBody.getTotalPrice());
-        return getSaleRepository().save(Sale.builder().tableNumber(salePostRequestBody.getTableNumber())
-                .clientCpf(client)
-                .productName(salePostRequestBody.getProductName()).productId(salePostRequestBody.getProductId())
+        validateStatusSituation(client.getClientCpf(), salePostRequestBody.getStatus(),
+                                salePostRequestBody.getTotalPrice());
+        Sale sale = getSaleRepository().save(Sale.builder().tableNumber(salePostRequestBody.getTableNumber())
+                .clientCpf(client).status(salePostRequestBody.getStatus())
+                .productName(salePostRequestBody.getProductName())
                 .quantityRequested(salePostRequestBody.getQuantityRequested())
-                .totalPrice(salePostRequestBody.getTotalPrice()).build()); // total price = price to pay for the order
+                .productId(productIds)
+                .saleDate(dateUtil.formatLocalDateTimeToDatabaseStyle(LocalDateTime.now()))
+                .totalPrice(salePostRequestBody.getTotalPrice()).build());
+        Payment payment = getPaymentRepository().findByClientCpfAndTime(sale.getClientCpf().getClientId(),
+                                                                        sale.getSaleDate());
+        payment.setSaleId(sale);
+        return sale; // total price = price to pay for the order
     }
+
+    private void validateStatusSituation(String clientCpf, Boolean status, BigDecimal totalPrice) {
+        if (!status){
+            validateOpenPayments(clientCpf, totalPrice);
+        } else {
+            validatePaymentPoints(clientCpf, totalPrice);
+        }
+    }
+    private void validateOpenPayments(String clientCpf, BigDecimal totalPrice) {
+        Client client = getClientService().findByCpfOrThrowBackBadRequestException(clientCpf);
+        BigDecimal sumOpenOrdersTotalPrice = getSaleRepository().sumOpenOrders(client.getClientId());
+        if (sumOpenOrdersTotalPrice==null){sumOpenOrdersTotalPrice = BigDecimal.ZERO;}
+        if (sumOpenOrdersTotalPrice.compareTo(client.getClientPoints())>0){
+            BigDecimal pointsMissing = sumOpenOrdersTotalPrice.subtract(client.getClientPoints());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Client "+clientCpf+" doesn't have enough points to finish the payment of open order(s)." +
+                            "\nTotal Points of existing order(s) = "+sumOpenOrdersTotalPrice+
+                            "\nClient Points = "+client.getClientPoints()+
+                            "\nPoints needed to finish payment = "+pointsMissing);
+        }
+        if (sumOpenOrdersTotalPrice.compareTo(client.getClientPoints())<=0){
+            Payment payment = createPayment(clientCpf,totalPrice);
+            payment.setStatus(false);
+            getPaymentRepository().save(payment);
+        }
+    }
+
     private void validateClient(String clientCpf) {
         //search if client exists, if not create client before proceeding with order;
         if (!clientRepository.existsClientCpf(clientCpf)){
@@ -115,17 +156,32 @@ public class SaleService {
                     "register the client before proceeding with the request");
         }
     }
+
     private void validatePaymentPoints(String clientCpf, BigDecimal totalPrice){
         Client client = clientService.findByCpfOrThrowBackBadRequestException(clientCpf);
-        if (totalPrice.compareTo(client.getClientPoints())>0){
-            //return value of points missing to complete the payment.
-            BigDecimal pointsMissing = totalPrice.subtract(client.getClientPoints());
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Client "+clientCpf+" doesn't have enough points to finish the payment." +
-                            "\nTotal points = "+totalPrice+"\nClient Points = "+client.getClientPoints()+
-                            "\nPoints needed to finish payment = "+pointsMissing);
+        BigDecimal sumOpenOrdersTotalPrice = getSaleRepository().sumOpenOrders(client.getClientId());
+        if (sumOpenOrdersTotalPrice==null){sumOpenOrdersTotalPrice = BigDecimal.ZERO;}
+        BigDecimal sumOpenOrdersAndNewOrder = (sumOpenOrdersTotalPrice.add(totalPrice));
+        if (sumOpenOrdersAndNewOrder.compareTo(client.getClientPoints())>0){
+            if (sumOpenOrdersTotalPrice == BigDecimal.ZERO){
+                BigDecimal pointsMissing = (totalPrice.subtract(client.getClientPoints()));
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Client "+clientCpf+" doesn't have enough points to finish the payment." +
+                                "\nTotal points = "+totalPrice+"\nClient Points = "+client.getClientPoints()+
+                                "\nPoints needed to finish payment = "+pointsMissing);
+
+            }else {
+                BigDecimal pointsMissing = (sumOpenOrdersAndNewOrder.subtract(client.getClientPoints()));
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Client "+clientCpf+" doesn't have enough points to finish the payment of open order(s) and add a new order." +
+                                "\nTotal Points of existing order(s) = "+sumOpenOrdersTotalPrice+
+                                "\nTotal Points of new order + existing order(s) = "+sumOpenOrdersAndNewOrder+
+                                "\nClient Points = "+client.getClientPoints()+
+                                "\nPoints needed to finish payment = "+pointsMissing);
+            }
+
         }
-        if (totalPrice.compareTo(client.getClientPoints())<=0){
+        if (sumOpenOrdersAndNewOrder.compareTo(client.getClientPoints())<=0){
             //subtract total price from points and finish payment
             createPayment(clientCpf,totalPrice);
             client.setClientPoints(client.getClientPoints().subtract(totalPrice));
@@ -138,7 +194,6 @@ public class SaleService {
             BigDecimal ingredientQuantity = (recipe.getIngredientQuantity().get(i).multiply(quantityRequested));
             validateProductStock(recipe.getRecipeIngredients().get(i), ingredientQuantity);
         }
-
     }
     private void validateProductStock(String productName, BigDecimal quantityRequested) {
         Product product = getProductService().findByNameOrThrowBackBadRequestException(productName);
@@ -156,10 +211,29 @@ public class SaleService {
     }
     private Payment createPayment(String clientCpf, BigDecimal totalPrice) {
         Payment payment = new Payment();
-        payment.setClientCpf(clientService.findByCpfOrThrowBackBadRequestException(clientCpf));
+        Client client = clientService.findByCpfOrThrowBackBadRequestException(clientCpf);
+        payment.setClientCpf(client);
         payment.setPointsSale(totalPrice);
         payment.setPaymentDate((dateUtil.formatLocalDateTimeToDatabaseStyle(LocalDateTime.now())));
-        payment.setStatus(false);
+        payment.setStatus(true);
         return getPaymentRepository().save(payment);
+    }
+    @Transactional
+    public void finishOpenOrders(FinishOpenOrders finishOpenOrders) {
+        Client client = clientService.findByCpfOrThrowBackBadRequestException(finishOpenOrders.getClientCpf());
+        if (!getSaleRepository().existsByClientCpfAndStatusOpen(client.getClientId())){
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The Client has no open orders to pay");
+        }
+        List<Sale> sale = getSaleRepository().findByClientCpfAndStatusOpen(client.getClientId());
+        BigDecimal sumOpenOrdersTotalPrice = getSaleRepository().sumOpenOrders(client.getClientId());
+        client.setClientPoints(client.getClientPoints().subtract(sumOpenOrdersTotalPrice));
+        for (int i =0; i< sale.size();i++){
+            Payment payment = getPaymentRepository().findBySaleId(sale.get(i).getSaleId());
+            payment.setStatus(true);
+            sale.get(i).setStatus(true);
+                     getPaymentRepository().save(payment);
+            getSaleRepository().save(sale.get(i));
+        }
+        getClientRepository().save(client);
     }
 }
